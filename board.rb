@@ -1,25 +1,37 @@
-require_relative 'piece'
-require 'colorize'
-
 class Board
   attr_reader :grid, :cursor_position
-  def initialize
+  attr_accessor :selected_position
+  
+  def initialize(fill = true)
     @grid = Array.new(8) do |row|
       Array.new(8)
     end
-    @cursor_position = [0,0]
+    @cursor_position = [7, 0]
     
-    generate_grid
+    generate_grid if fill
+  end
+  
+  def move(start, end_pos)
+    #checks validity of move
+    #if valid, moves piece
+    self[start].move(end_pos)
+  end
+  def [](pos)
+    row, col = pos
+    @grid[row][col]
+  end
+  
+  def []=(pos, piece)
+    row, col = pos
+    @grid[row][col] = piece
   end
   
   def in_board?(pos)
-    pos.all?{|index| (0...8).cover?(index)}
+    pos.all? { |index| (0...8).cover?(index) }
   end
   
   def occupied?(pos)
-    #return true of position is occupied
-    row, col = pos
-    !@grid[row][col].nil?
+    !self[pos].nil?
   end
 
   def who_occupies(pos)
@@ -27,89 +39,84 @@ class Board
     @grid[row][col]
   end
   
+  def pieces
+    @grid.flatten.compact
+  end
+  
+  def deep_dup
+    duped_board = Board.new(false)
+    
+    pieces.each_with_index do |piece, index|
+      duped_piece = piece.class.new(duped_board, piece.pos, piece.color)
+      duped_board[piece.pos] = duped_piece
+    end
+    
+    duped_board
+  end
+  
   def in_check?(color)
     king_pos = nil
     
-    @grid.each do |row|
-      row.each do |piece|
-        if piece.is_a?(King) && piece.color == color
-          king_pos = piece.pos
-        end
+    pieces.each do |piece|
+      #use color_pieces
+      if piece.is_a?(King) && piece.color == color
+        king_pos = piece.pos
       end
     end
     
-    @grid.any? do |row|
-      row.any? do |piece|
-        if !piece.nil? && piece.color != color
-          piece.moves.include?(king_pos)
-        end
+    pieces.any? do |piece|
+      #use color_pieces
+      if piece.color != color
+        piece.moves.include?(king_pos)
       end
     end
   end
   
-  def execute_move(pos)
-    start_move, end_move = pos
-    
-    s_row, s_col = start_move
-    e_row, e_col = end_move
-    
-    piece = @grid[s_row][s_col]
-    #if piece.moves.include?(end_move) 
-      @grid[e_row][e_col] = piece 
-      @grid[s_row][s_col] = nil
-      #end
-      
+  def color_pieces(color)
+    pieces.select { |piece| piece.color == color }
   end
-      
+  
+  def checkmate?(color)
+    in_check?(color) && color_pieces(color).all? do |piece| 
+      piece.valid_moves.empty?
+    end
+  end
   
   def display
-    rowc, colc = @cursor_position
+    display_string = ""
     @grid.each.with_index do |row, rowi|
-      puts
+      display_string = display_string + "\n"
       row.each_with_index do |piece, coli|
-        if rowi == rowc && coli == colc        
-          unless piece.nil?
-            print (piece.mark + " ").white.on_black
-          else
-            print ('_' + " ").white.on_black
-          end
+        add_string = (piece ?  "#{piece.mark} " :  "  ")
+        
+        if [rowi, coli] == @cursor_position
+          print add_string.on_blue
+        elsif [rowi, coli] == @selected_position
+          print add_string.on_red
+        elsif (rowi + coli).even?
+          print add_string.on_green
         else
-          unless piece.nil?
-            print piece.mark + " "
-          else
-            print '_' + " "
-          end
+          print add_string.on_white
         end
-      end
+      end 
+      print "\n"    
     end
-    puts
+    display_string = display_string + "\n"
   end
   
-  #put all the pieces in later
+  
   def generate_grid
-    @grid[0][0] = Rook.new(self, [0,0], :black)
-    @grid[0][7] = Rook.new(self, [0,7], :black)
-    @grid[7][0] = Rook.new(self, [7,0], :white)
-    @grid[7][7] = Rook.new(self, [7,7], :white)
-    @grid[0][1] = Knight.new(self, [0,1], :black)
-    @grid[0][6] = Knight.new(self, [0,6], :black)
-    @grid[7][1] = Knight.new(self, [7,1], :white)
-    @grid[7][6] = Knight.new(self, [7,6], :white)
-    @grid[0][2] = Bishop.new(self, [0,2], :black)
-    @grid[0][5] = Bishop.new(self, [0,5], :black)
-    @grid[7][2] = Bishop.new(self, [7,2], :white)
-    @grid[7][5] = Bishop.new(self, [7,5], :white)
-    @grid[7][4] = King.new(self, [7,4], :white)
-    @grid[0][4] = King.new(self, [0,4], :black)
-    @grid[7][3] = Queen.new(self, [7,3], :white)
-    @grid[0][3] = Queen.new(self, [0,3], :black)
-    @grid[1].map!.with_index do |space, index| 
-      space = Pawn.new(self,[1,index], :black)
-    end
-    @grid[6].map!.with_index do |space, index|
-      space = Pawn.new(self,[6,index], :white)
-    end
-    
+    back_row = [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook]
+    place_pieces(back_row, 0, :black)
+    place_pieces(back_row, 7, :white)
+    pawns = Array.new(8, Pawn)
+    place_pieces(pawns, 1, :black)
+    place_pieces(pawns, 6, :white)
   end
   
+  def place_pieces(pieces_order, row, color)
+    pieces_order.each_with_index do |klass, col|       
+      self[[row, col]] = klass.new(self, [row, col], color)
+    end
+  end
 end

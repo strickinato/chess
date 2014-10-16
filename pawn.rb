@@ -1,5 +1,3 @@
-require_relative 'piece'
-
 class Pawn < Piece
   DELTAS = [
     [1, 0],
@@ -10,42 +8,48 @@ class Pawn < Piece
     [1, -1],
     [1, 1]
   ]
+  
   attr_reader :pos, :color
   
   def initialize(board, pos, color)
-    super(board, pos, color)
+    super
     @init_pos = pos
   end
   
+  def direction
+     @color == :white ? -1 : 1
+  end
+  
   def moves
-    move_dirs = DELTAS
-    attack_dirs = ATTACK_DELTAS
-    if @color == :white
-      move_dirs = DELTAS.map {|offset| [offset.first * -1, offset.last]}
-      attack_dirs = ATTACK_DELTAS.map {|offset| [offset.first * -1, offset.last]} 
-    end
     moves = []
     
     #One forward
-    new_pos = [(@pos.first + move_dirs[0].first),(@pos.last + move_dirs[0].last)]
-    if !@board.occupied?(new_pos)
+    new_pos = get_new_pos(@pos, move_dirs(direction)[0])
+     unless @board.occupied?(new_pos)
       moves << new_pos
     
-    
       #Two forward
-      new_pos = [(@pos.first + move_dirs[1].first),(@pos.last + move_dirs[1].last)] 
+      new_pos = get_new_pos(@pos, move_dirs(direction)[1])
       if first_move? && !@board.occupied?(new_pos)
         moves << new_pos
       end
     end
     
     #Attack
-    attack_dirs.each do |delta|
-      new_pos = pos.map.with_index {|x,i| x + delta[i]}
+    attack_dirs(direction).each do |delta|
+      new_pos = get_new_pos(@pos, delta)
       moves << new_pos if attack_position_has_enemy?(new_pos)
     end    
     
     moves
+  end
+  
+  def move_dirs(direction)
+    DELTAS.map {|offset| [offset.first * direction, offset.last]}
+  end
+  
+  def attack_dirs(direction)
+    ATTACK_DELTAS.map {|offset| [offset.first * direction, offset.last]} 
   end
   
   def first_move?
@@ -53,9 +57,9 @@ class Pawn < Piece
   end
   
   def attack_position_has_enemy?(pos)
-     if @board.in_board?(pos) && @board.occupied?(pos)
-       enemy?(@board.who_occupies(pos))
-     end
+    if @board.in_board?(pos) && @board.occupied?(pos)
+      enemy?(@board.who_occupies(pos))
+    end
   end
   
   def mark
